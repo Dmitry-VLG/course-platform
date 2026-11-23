@@ -32,10 +32,10 @@ public final class Views {
         }
     }
     public record WorkView(int id, int assignmentId, int studentId, Instant submittedAt, String content,
-                           Integer score, String feedback) {
+                           Integer score, String feedback, Submission.Status status) {
         public static WorkView of(Submission s) {
             return new WorkView(s.getId(), s.getAssignment().getId(), s.getStudent().getId(),
-                    s.getSubmittedAt(), s.getContent(), s.getScore(), s.getFeedback());
+                    s.getSubmittedAt(), s.getContent(), s.getScore(), s.getFeedback(), s.getStatus());
         }
     }
     public record QuestionView(int id, String text, QuestionType type, List<Named> options) {}

@@ -50,7 +50,7 @@ function taskBlock(task, work, enrolled, studentId) {
     element('p', 'Срок: ' + task.dueDate + ' · До ' + task.maxScore + ' баллов', 'meta'));
   if (work) {
     block.append(element('p', 'Ваше решение: ' + work.content));
-    block.append(element('p', work.score == null ? 'Ожидает проверки' : 'Оценка: ' + work.score + ' из ' + task.maxScore));
+    block.append(element('p', work.status === 'SUBMITTED' ? 'Ожидает проверки' : 'Оценка: ' + work.score + ' из ' + task.maxScore));
     if (work.feedback) block.append(element('p', work.feedback));
   } else if (enrolled) {
     const label = element('label', 'Текст решения');
@@ -105,12 +105,21 @@ async function renderQuiz(container, id, studentId) {
 async function showCourse(id) {
   currentCourse = id;
   const version = ++generation;
+  detail.setAttribute('aria-busy', 'true');
+  detail.replaceChildren(element('p', 'Загрузка курса…'));
   const studentId = Number(student.value);
   const forStudent = path => studentId ? api('/users/' + studentId + path) : Promise.resolve([]);
-  const [data, registrations, works, results] = await Promise.all([
+  const courseData = await Promise.all([
     api('/courses/' + id), forStudent('/courses'), forStudent('/submissions'), forStudent('/quiz-results')
-  ]);
+  ]).catch(error => {
+    if (version === generation) {
+      detail.replaceChildren(element('p', 'Не удалось загрузить курс.'));
+      detail.removeAttribute('aria-busy');
+      throw error;
+    }
+  });
   if (version !== generation) return;
+  const [data, registrations, works, results] = courseData;
   const c = data.course;
   const enrolled = registrations.some(e => e.course.id === id);
   detail.replaceChildren(element('p', c.category.name, 'meta'), element('h2', c.title));
@@ -118,7 +127,7 @@ async function showCourse(id) {
   detail.append(element('p', [c.teacher.name, c.duration, c.startDate].filter(Boolean).join(' · '), 'meta'));
   if (studentId) detail.append(action(enrolled ? 'Отписаться от курса' : 'Записаться на курс', async () => {
     await api('/courses/' + id + '/enroll?user=' + studentId, enrolled ? 'DELETE' : 'POST');
-    await showCourse(id);
+    await showCourse(currentCourse);
   }));
   for (const mod of data.modules) {
     const section = element('section');
@@ -134,16 +143,19 @@ async function showCourse(id) {
         section.append(taskBlock(task, works.find(w => w.assignmentId === task.id), enrolled, studentId));
       }
     }
-    if (mod.quizId && enrolled) {
-      const quiz = element('div');
-      quiz.append(action('Открыть тест', () => renderQuiz(quiz, mod.quizId, studentId)));
-      section.append(quiz);
+    if (mod.quizId) {
+      if (enrolled) {
+        const quiz = element('div');
+        quiz.append(action('Открыть тест', () => renderQuiz(quiz, mod.quizId, studentId)));
+        section.append(quiz);
+      }
       for (const result of results.filter(r => r.quizId === mod.quizId)) {
         section.append(element('p', new Date(result.takenAt).toLocaleString('ru-RU') + ' · Баллы: ' + result.score, 'meta'));
       }
     }
     detail.append(section);
   }
+  detail.removeAttribute('aria-busy');
   for (const btn of catalog.children) btn.setAttribute('aria-current', String(Number(btn.dataset.id) === id));
 }
 

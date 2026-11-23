@@ -48,10 +48,10 @@ class PlatformIntegrationTest {
         teacher = directory.saveUser(null, new Person("Teacher", "t" + suffix + "@example.org", Role.TEACHER)).id();
         student = directory.saveUser(null, new Person("Student", "s" + suffix + "@example.org", Role.STUDENT)).id();
         category = directory.saveCategory(null, new Name("Data " + suffix)).id();
-        course = catalog.saveCourse(null, courseData("Hibernate")).id();
-        module = catalog.saveModule(null, course, teacher, new ModuleData("Mapping", 1, null)).id();
-        lesson = catalog.saveLesson(null, module, teacher, new LessonData("Ownership", "Read the mapping", null)).id();
-        task = catalog.saveTask(null, lesson, teacher, new Task("Map a relation", "Explain the FK",
+        course = catalog.createCourse(courseData("Hibernate")).id();
+        module = catalog.createModule(course, teacher, new ModuleData("Mapping", 1, null)).id();
+        lesson = catalog.createLesson(module, teacher, new LessonData("Ownership", "Read the mapping", null)).id();
+        task = catalog.createTask(lesson, teacher, new Task("Map a relation", "Explain the FK",
                 LocalDate.now().plusDays(1), 10)).id();
     }
 
@@ -71,7 +71,7 @@ class PlatformIntegrationTest {
 
     @Test void courseCrudReloadsStructureAndCascadesDelete() {
         assertEquals(task, catalog.detail(course).modules().get(0).lessons().get(0).assignments().get(0).id());
-        catalog.saveCourse(course, courseData("JPA"));
+        catalog.updateCourse(course, courseData("JPA"));
         assertEquals("JPA", catalog.detail(course).course().title());
         catalog.deleteCourse(course);
         assertFalse(courses.existsById(course));
@@ -104,8 +104,8 @@ class PlatformIntegrationTest {
     @Test void deletingCoursePreservesSharedTagAndCategory() {
         int tag = directory.saveTag(null, new Name("Tag " + suffix)).id();
         CourseData tagged = new CourseData("Tagged", null, category, teacher, null, null, Set.of(tag));
-        catalog.saveCourse(course, tagged);
-        int other = catalog.saveCourse(null, tagged).id();
+        catalog.updateCourse(course, tagged);
+        int other = catalog.createCourse(tagged).id();
         catalog.deleteCourse(course);
         assertEquals(tag, catalog.detail(other).course().tags().get(0).id());
         assertEquals(category, catalog.detail(other).course().category().id());
@@ -134,9 +134,11 @@ class PlatformIntegrationTest {
         assertEquals(task, assignments.tasksFor(student).get(0).id());
         var work = assignments.submit(task, new Work(student, "answer"));
         assertNull(work.score());
+        assertEquals(Submission.Status.SUBMITTED, work.status());
         assertThrows(PlatformException.class, () -> assignments.submit(task, new Work(student, "again")));
         assignments.grade(work.id(), new Grade(teacher, 8, "Good"));
         assertEquals(8, assignments.solutions(task).get(0).score());
+        assertEquals(Submission.Status.GRADED, assignments.solutions(task).get(0).status());
         assertEquals("Good", assignments.submittedBy(student).get(0).feedback());
     }
 
@@ -214,6 +216,66 @@ class PlatformIntegrationTest {
         http.perform(post(url).param("user", id)).andExpect(status().isCreated());
         http.perform(post(url).param("user", id)).andExpect(status().isConflict());
         http.perform(delete(url).param("user", id)).andExpect(status().isNoContent());
+    }
+
+    @Test
+    void restRejectsFractionalGradeBeforeChangingSubmission() throws Exception {
+        enrollment.enroll(course, student);
+        var work = assignments.submit(task, new Work(student, "answer"));
+
+        http.perform(patch("/api/submissions/{id}/grade", work.id()).contentType("application/json")
+                        .content(json.writeValueAsBytes(Map.of("teacherId", teacher, "score", 10.9))))
+                .andExpect(status().isBadRequest());
+
+        assertNull(assignments.submittedBy(student).get(0).score());
+    }
+
+    @Test
+    void restTeacherCanReplaceAndDeleteQuizBeforeFirstAttempt() throws Exception {
+        var original = quiz();
+        var replacement = new QuizData("Revised", 12, List.of(new QuestionData("New question?",
+                QuestionType.SINGLE_CHOICE, List.of(new OptionData("Yes", true), new OptionData("No", false)))));
+        String url = "/api/quizzes/" + original.id();
+
+        http.perform(put(url).param("teacherId", Integer.toString(student)).contentType("application/json")
+                        .content(json.writeValueAsBytes(replacement)))
+                .andExpect(status().isForbidden());
+        http.perform(put(url).param("teacherId", Integer.toString(teacher)).contentType("application/json")
+                        .content(json.writeValueAsBytes(replacement)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.questions[0].id").isNumber());
+        var updated = quizzes.get(original.id());
+        assertEquals("Revised", updated.title());
+        assertEquals(List.of("New question?"), updated.questions().stream().map(Views.QuestionView::text).toList());
+
+        http.perform(delete(url).param("teacherId", Integer.toString(teacher)))
+                .andExpect(status().isNoContent());
+        http.perform(get(url)).andExpect(status().isNotFound());
+        assertNull(catalog.detail(course).modules().get(0).quizId());
+        assertNotNull(quiz());
+    }
+
+    @Test
+    void restPreservesQuizWithExistingAttempts() throws Exception {
+        var original = quiz();
+        var question = original.questions().get(0);
+        enrollment.enroll(course, student);
+        var attempt = quizzes.take(original.id(), new Attempt(student,
+                Map.of(question.id(), Set.of(question.options().get(0).id()))));
+        var replacement = new QuizData("Revised", 12, List.of(new QuestionData("New question?",
+                QuestionType.SINGLE_CHOICE, List.of(new OptionData("Yes", true), new OptionData("No", false)))));
+        String url = "/api/quizzes/" + original.id();
+
+        http.perform(put(url).param("teacherId", Integer.toString(teacher)).contentType("application/json")
+                        .content(json.writeValueAsBytes(replacement)))
+                .andExpect(status().isConflict());
+        http.perform(delete(url).param("teacherId", Integer.toString(teacher)))
+                .andExpect(status().isConflict());
+
+        assertEquals(original, quizzes.get(original.id()));
+        var savedAttempt = quizzes.resultsForQuiz(original.id()).get(0);
+        assertEquals(attempt.id(), savedAttempt.id());
+        assertEquals(1, savedAttempt.score());
     }
 
     @Test void restQuizDoesNotRevealAnswerKey() throws Exception {

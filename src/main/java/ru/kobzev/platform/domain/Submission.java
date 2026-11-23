@@ -6,6 +6,10 @@ import java.time.Instant;
 @Entity
 @Table(name = "submissions", uniqueConstraints = @UniqueConstraint(columnNames = {"assignment_id", "student_id"}))
 public class Submission extends Identified {
+    public enum Status {
+        SUBMITTED, GRADED
+    }
+
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "assignment_id", nullable = false)
     private Assignment assignment;
@@ -56,6 +60,10 @@ public class Submission extends Identified {
 
     public void setContent(String content) {
         this.content = content;
+    }
+
+    public Status getStatus() {
+        return score == null ? Status.SUBMITTED : Status.GRADED;
     }
 
     public Integer getScore() {

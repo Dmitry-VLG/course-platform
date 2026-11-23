@@ -43,21 +43,21 @@ public class DemoData implements ApplicationRunner {
         int category = directory.saveCategory(null, new Name("Базы данных")).id();
         int tag = directory.saveTag(null, new Name("Hibernate")).id();
         LocalDate start = LocalDate.now();
-        int course = catalog.saveCourse(null, new CourseData("ORM и Hibernate",
+        int course = catalog.createCourse(new CourseData("ORM и Hibernate",
                 "От объектной модели до транзакционных запросов.", category, teacher, "4 недели", start, Set.of(tag))).id();
-        catalog.saveCourse(null, new CourseData("Проектирование схем SQL",
+        catalog.createCourse(new CourseData("Проектирование схем SQL",
                 "Ключи, связи и ограничения целостности.", category, teacher, "2 недели", start, Set.of()));
-        int first = catalog.saveModule(null, course, teacher, new ModuleData("Сущности и связи", 1,
+        int first = catalog.createModule(course, teacher, new ModuleData("Сущности и связи", 1,
                 "Отображение объектов на таблицы")).id();
-        int second = catalog.saveModule(null, course, teacher, new ModuleData("Загрузка данных", 2,
+        int second = catalog.createModule(course, teacher, new ModuleData("Загрузка данных", 2,
                 "Границы транзакции и выборки")).id();
-        int lesson = catalog.saveLesson(null, first, teacher, new LessonData("Владелец связи",
+        int lesson = catalog.createLesson(first, teacher, new LessonData("Владелец связи",
                 "В паре Course и Module внешний ключ course_id хранится в таблице модулей. Поле Module.course управляет этой связью.", null)).id();
-        int fetchLesson = catalog.saveLesson(null, second, teacher, new LessonData("Ленивая коллекция",
+        int fetchLesson = catalog.createLesson(second, teacher, new LessonData("Ленивая коллекция",
                 "Соберите DTO внутри транзакции, пока коллекция модулей доступна через открытый контекст.", null)).id();
-        int task = catalog.saveTask(null, lesson, teacher, new Task("Спроектировать связь",
+        int task = catalog.createTask(lesson, teacher, new Task("Спроектировать связь",
                 "Объясните назначение mappedBy на примере курса и модуля.", start.plusWeeks(1), 10)).id();
-        catalog.saveTask(null, fetchLesson, teacher, new Task("Запрос с JOIN FETCH",
+        catalog.createTask(fetchLesson, teacher, new Task("Запрос с JOIN FETCH",
                 "Напишите JPQL для получения курса вместе с модулями.", start.plusWeeks(2), 10));
         var quiz = quizzes.create(first, teacher, new QuizData("Проверка модели", 10, List.of(
                 new QuestionData("Где хранится внешний ключ курса?", QuestionType.SINGLE_CHOICE, List.of(

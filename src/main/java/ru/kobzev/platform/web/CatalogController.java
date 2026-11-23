@@ -2,7 +2,16 @@ package ru.kobzev.platform.web;
 
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseStatus;
+import org.springframework.web.bind.annotation.RestController;
 import ru.kobzev.platform.api.Inputs;
 import ru.kobzev.platform.api.Views;
 import ru.kobzev.platform.service.CatalogService;
@@ -13,7 +22,9 @@ import java.util.List;
 public class CatalogController {
     private final CatalogService service;
 
-    public CatalogController(CatalogService service) { this.service = service; }
+    public CatalogController(CatalogService service) {
+        this.service = service;
+    }
 
     @GetMapping("/courses")
     public List<Views.CourseCard> courses() {
@@ -28,12 +39,12 @@ public class CatalogController {
     @PostMapping("/courses")
     @ResponseStatus(HttpStatus.CREATED)
     public Views.CourseCard createCourse(@Valid @RequestBody Inputs.CourseData data) {
-        return service.saveCourse(null, data);
+        return service.createCourse(data);
     }
 
     @PutMapping("/courses/{id}")
     public Views.CourseCard updateCourse(@PathVariable int id, @Valid @RequestBody Inputs.CourseData data) {
-        return service.saveCourse(id, data);
+        return service.updateCourse(id, data);
     }
 
     @DeleteMapping("/courses/{id}")
@@ -44,13 +55,15 @@ public class CatalogController {
 
     @PostMapping("/courses/{id}/modules")
     @ResponseStatus(HttpStatus.CREATED)
-    public Views.ModuleView createModule(@PathVariable int id, @RequestParam("teacherId") int teacherId, @Valid @RequestBody Inputs.ModuleData data) {
-        return service.saveModule(null, id, teacherId, data);
+    public Views.ModuleView createModule(@PathVariable int id, @RequestParam("teacherId") int teacherId,
+                                         @Valid @RequestBody Inputs.ModuleData data) {
+        return service.createModule(id, teacherId, data);
     }
 
     @PutMapping("/modules/{id}")
-    public Views.ModuleView updateModule(@PathVariable int id, @RequestParam("teacherId") int teacherId, @Valid @RequestBody Inputs.ModuleData data) {
-        return service.saveModule(id, null, teacherId, data);
+    public Views.ModuleView updateModule(@PathVariable int id, @RequestParam("teacherId") int teacherId,
+                                         @Valid @RequestBody Inputs.ModuleData data) {
+        return service.updateModule(id, teacherId, data);
     }
 
     @DeleteMapping("/modules/{id}")
@@ -61,13 +74,15 @@ public class CatalogController {
 
     @PostMapping("/modules/{id}/lessons")
     @ResponseStatus(HttpStatus.CREATED)
-    public Views.LessonView createLesson(@PathVariable int id, @RequestParam("teacherId") int teacherId, @Valid @RequestBody Inputs.LessonData data) {
-        return service.saveLesson(null, id, teacherId, data);
+    public Views.LessonView createLesson(@PathVariable int id, @RequestParam("teacherId") int teacherId,
+                                         @Valid @RequestBody Inputs.LessonData data) {
+        return service.createLesson(id, teacherId, data);
     }
 
     @PutMapping("/lessons/{id}")
-    public Views.LessonView updateLesson(@PathVariable int id, @RequestParam("teacherId") int teacherId, @Valid @RequestBody Inputs.LessonData data) {
-        return service.saveLesson(id, null, teacherId, data);
+    public Views.LessonView updateLesson(@PathVariable int id, @RequestParam("teacherId") int teacherId,
+                                         @Valid @RequestBody Inputs.LessonData data) {
+        return service.updateLesson(id, teacherId, data);
     }
 
     @DeleteMapping("/lessons/{id}")
@@ -78,13 +93,15 @@ public class CatalogController {
 
     @PostMapping("/lessons/{id}/assignments")
     @ResponseStatus(HttpStatus.CREATED)
-    public Views.TaskView createTask(@PathVariable int id, @RequestParam("teacherId") int teacherId, @Valid @RequestBody Inputs.Task data) {
-        return service.saveTask(null, id, teacherId, data);
+    public Views.TaskView createTask(@PathVariable int id, @RequestParam("teacherId") int teacherId,
+                                         @Valid @RequestBody Inputs.Task data) {
+        return service.createTask(id, teacherId, data);
     }
 
     @PutMapping("/assignments/{id}")
-    public Views.TaskView updateTask(@PathVariable int id, @RequestParam("teacherId") int teacherId, @Valid @RequestBody Inputs.Task data) {
-        return service.saveTask(id, null, teacherId, data);
+    public Views.TaskView updateTask(@PathVariable int id, @RequestParam("teacherId") int teacherId,
+                                         @Valid @RequestBody Inputs.Task data) {
+        return service.updateTask(id, teacherId, data);
     }
 
     @DeleteMapping("/assignments/{id}")

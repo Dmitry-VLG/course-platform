@@ -4,11 +4,20 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import ru.kobzev.platform.api.Inputs;
 import ru.kobzev.platform.api.Views;
-import ru.kobzev.platform.domain.*;
-import ru.kobzev.platform.repository.*;
-import java.util.List;
+import ru.kobzev.platform.domain.AnswerOption;
+import ru.kobzev.platform.domain.CourseModule;
+import ru.kobzev.platform.domain.Question;
+import ru.kobzev.platform.domain.QuestionType;
+import ru.kobzev.platform.domain.Quiz;
+import ru.kobzev.platform.domain.QuizSubmission;
+import ru.kobzev.platform.domain.Role;
+import ru.kobzev.platform.domain.User;
+import ru.kobzev.platform.repository.QuizRepository;
+import ru.kobzev.platform.repository.QuizSubmissionRepository;
+
 import java.time.Instant;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 @Service
@@ -30,15 +39,51 @@ public class QuizService {
     public Views.QuizView create(int moduleId, int teacherId, Inputs.QuizData data) {
         CourseModule module = access.get(CourseModule.class, moduleId);
         access.requireTeacher(module.getCourse(), teacherId);
-        if (module.getQuiz() != null) throw PlatformException.conflict("У модуля уже есть тест");
+        if (module.getQuiz() != null) {
+            throw PlatformException.conflict("У модуля уже есть тест");
+        }
         Quiz quiz = new Quiz();
         quiz.setModule(module);
+        applyQuizData(quiz, data);
+        module.setQuiz(quiz);
+        return view(quizzes.save(quiz));
+    }
+
+    @Transactional
+    public Views.QuizView update(int id, int teacherId, Inputs.QuizData data) {
+        Quiz quiz = editableQuiz(id, teacherId);
+        applyQuizData(quiz, data);
+        quizzes.flush();
+        return view(quiz);
+    }
+
+    @Transactional
+    public void delete(int id, int teacherId) {
+        Quiz quiz = editableQuiz(id, teacherId);
+        quiz.getModule().setQuiz(null);
+        quizzes.delete(quiz);
+    }
+
+    private Quiz editableQuiz(int id, int teacherId) {
+        Quiz quiz = lockQuiz(id);
+        access.requireTeacher(quiz.getModule().getCourse(), teacherId);
+        if (results.existsByQuizId(id)) {
+            throw PlatformException.conflict("Тест нельзя изменить или удалить после первой попытки");
+        }
+        return quiz;
+    }
+
+    private Quiz lockQuiz(int id) {
+        return quizzes.findForUpdate(id).orElseThrow(() -> PlatformException.missing("Тест не найден"));
+    }
+
+    private void applyQuizData(Quiz quiz, Inputs.QuizData data) {
         quiz.setTitle(data.title().strip());
         quiz.setTimeLimit(data.timeLimit());
-        for (Inputs.QuestionData source : data.questions()) addQuestion(quiz, source);
-        module.setQuiz(quiz);
-        quizzes.save(quiz);
-        return view(quiz);
+        quiz.getQuestions().clear();
+        for (Inputs.QuestionData source : data.questions()) {
+            addQuestion(quiz, source);
+        }
     }
 
     private void addQuestion(Quiz quiz, Inputs.QuestionData source) {
@@ -66,21 +111,25 @@ public class QuizService {
                         q.getOptions().stream().map(o -> new Views.Named(o.getId(), o.getText())).toList())).toList());
     }
 
-    public Views.QuizView get(int id) { return view(access.get(Quiz.class, id)); }
+    public Views.QuizView get(int id) {
+        return view(access.get(Quiz.class, id));
+    }
 
     private QuizScoring.Key key(Question q) {
         Set<Integer> available = new HashSet<>();
         Set<Integer> correct = new HashSet<>();
         for (AnswerOption option : q.getOptions()) {
             available.add(option.getId());
-            if (option.isCorrect()) correct.add(option.getId());
+            if (option.isCorrect()) {
+                correct.add(option.getId());
+            }
         }
         return new QuizScoring.Key(q.getId(), q.getType(), available, correct);
     }
 
     @Transactional
     public Views.Result take(int id, Inputs.Attempt attempt) {
-        Quiz quiz = access.get(Quiz.class, id);
+        Quiz quiz = lockQuiz(id);
         User student = access.participant(attempt.studentId(), quiz.getModule().getCourse());
         int score = QuizScoring.score(quiz.getQuestions().stream().map(this::key).toList(), attempt.answers());
         QuizSubmission r = new QuizSubmission();

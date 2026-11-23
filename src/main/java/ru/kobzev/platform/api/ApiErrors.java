@@ -1,12 +1,14 @@
 package ru.kobzev.platform.api;
 
-import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.http.*;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
-import org.springframework.web.bind.MethodArgumentNotValidException;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ProblemDetail;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.RestControllerAdvice;
 import ru.kobzev.platform.service.PlatformException;
 
 @RestControllerAdvice
@@ -14,7 +16,13 @@ import ru.kobzev.platform.service.PlatformException;
 public class ApiErrors {
     @ExceptionHandler(PlatformException.class)
     ProblemDetail domain(PlatformException e) {
-        return ProblemDetail.forStatusAndDetail(e.getStatus(), e.getMessage());
+        HttpStatus status = switch (e.getReason()) {
+            case MISSING -> HttpStatus.NOT_FOUND;
+            case INVALID -> HttpStatus.BAD_REQUEST;
+            case CONFLICT -> HttpStatus.CONFLICT;
+            case FORBIDDEN -> HttpStatus.FORBIDDEN;
+        };
+        return ProblemDetail.forStatusAndDetail(status, e.getMessage());
     }
 
     @ExceptionHandler(DataIntegrityViolationException.class)

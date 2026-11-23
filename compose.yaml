@@ -1,0 +1,29 @@
+services:
+  db:
+    image: postgres:18
+    environment:
+      POSTGRES_DB: courses
+      POSTGRES_USER: courses
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD}
+    volumes:
+      - course_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U courses -d courses"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+  app:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: dev
+      DB_URL: jdbc:postgresql://db:5432/courses
+      DB_USER: courses
+      DB_PASSWORD: ${DB_PASSWORD}
+      DEMO_ENABLED: ${DEMO_ENABLED:-true}
+    ports:
+      - "127.0.0.1:${APP_PORT:-8080}:8080"
+volumes:
+  course_data:
